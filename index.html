@@ -1,25 +1,907 @@
-<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Kiểm tra nội quy - V1</title><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><style>
-body{font-family:Arial,sans-serif;margin:0;background:#f4f6f8;color:#17202a}.wrap{max-width:760px;margin:auto;padding:16px}.card{background:#fff;border-radius:14px;padding:18px;margin:12px 0;box-shadow:0 2px 10px #0001}input,textarea,button{font:inherit;width:100%;box-sizing:border-box;padding:12px;border-radius:9px;border:1px solid #ccd3da}button{background:#1769e0;color:#fff;border:0;font-weight:700;margin-top:10px}.danger{background:#b42318}.muted{color:#667085}.q{padding:14px 0;border-bottom:1px solid #eee}.opt{display:block;padding:10px 0}.nav{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}.nav button{background:#eef2f6;color:#17202a;margin:0}.nav button.done{background:#d1fadf}.timer{font-size:24px;font-weight:700;text-align:center;position:sticky;top:0;background:#fff;padding:10px;z-index:3}.hidden{display:none}.unanswered{color:#b42318;font-weight:700}</style></head><body><div class="wrap"><div class="card" id="start"><h2>Kiểm tra nội quy V1</h2><p class="muted">45 phút · Đạt từ 70/100 · Được phép thi lại không giới hạn</p><label>Mã nhân viên</label><input id="code" autocomplete="off"><label>Họ và tên</label><input id="name" autocomplete="name"><button id="begin">Bắt đầu</button><p id="msg" class="unanswered"></p></div><div id="exam" class="hidden"><div class="card timer" id="timer">45:00</div><div class="card"><div id="qnav" class="nav"></div></div><div class="card"><div id="question"></div><button id="prev">Câu trước</button><button id="next">Câu tiếp</button><button id="submit" class="danger">Nộp bài</button></div></div><div id="result" class="card hidden"></div></div><script>const cfg=window.APP_CONFIG; const sb=supabase.createClient(cfg.SUPABASE_URL,cfg.SUPABASE_PUBLISHABLE_KEY); let exam=null,attemptId=null,answers={},idx=0,endAt=0,timer;
-const EXAM_API=cfg.SUPABASE_URL+'/functions/v1/exam-api';
-async function api(action,body){
-const r=await fetch(EXAM_API,{
-method:'POST',
-headers:{
-'Content-Type':'application/json',
-'apikey':cfg.SUPABASE_PUBLISHABLE_KEY
-},
-body:JSON.stringify({action,...body})
-});
-const data=await r.json();
-if(!r.ok)throw new Error(data.error||'Lỗi Edge Function');
-return data;
+<!doctype html>
+<html lang="vi">
+
+<head>
+
+<meta charset="utf-8">
+
+<meta
+  name="viewport"
+  content="width=device-width,initial-scale=1"
+>
+
+<title>Kiểm tra nội quy - V1</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script src="config.js"></script>
+
+<style>
+
+body{
+  font-family:Arial,sans-serif;
+  margin:0;
+  background:#f4f6f8;
+  color:#17202a
 }
-const $=id=>document.getElementById(id);
-$('begin').onclick=async()=>{try{ $('msg').textContent='Đang kết nối...'; const code=$('code').value.trim(),name=$('name').value.trim(); if(!code||!name)throw new Error('Vui lòng nhập mã nhân viên và họ tên.'); exam=await api('start',{employee_code:code,employee_name:name}); attemptId=exam.attempt_id; endAt=new Date(exam.expires_at).getTime(); $('start').classList.add('hidden'); $('exam').classList.remove('hidden'); renderNav();renderQ(); timer=setInterval(tick,500);tick();}catch(e){$('msg').textContent=e.message||String(e)}};
-function tick(){let s=Math.max(0,Math.floor((endAt-Date.now())/1000));$('timer').textContent=`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;if(s<=0){clearInterval(timer);submit(true)}}
-function renderNav(){ $('qnav').innerHTML=exam.questions.map((q,i)=>`<button id="n${i}" onclick="go(${i})">${q.display_number}</button>`).join('') }
-function renderQ(){const q=exam.questions[idx], a=answers[q.id]||'';let html=`<div class="muted">Câu ${q.display_number} · ${q.max_points} điểm</div><h3>${escapeHtml(q.prompt)}</h3>`; if(q.type==='tf') html+=['Đúng','Sai'].map(x=>`<label class="opt"><input type="radio" name="ans" value="${x}" ${a===x?'checked':''} onchange="saveAns(this.value)"> ${x}</label>`).join(''); else if(q.type==='mcq') html+=Object.entries(q.options||{}).map(([k,v])=>`<label class="opt"><input type="radio" name="ans" value="${k}" ${a===k?'checked':''} onchange="saveAns(this.value)"> <b>${k}.</b> ${escapeHtml(v)}</label>`).join(''); else html+=`<textarea id="essay" rows="7" onchange="saveAns(this.value)" oninput="saveAns(this.value)">${escapeHtml(a)}</textarea>`; $('question').innerHTML=html; [...document.querySelectorAll('#qnav button')].forEach((b,i)=>b.classList.toggle('done',!!answers[exam.questions[i].id]));}
-function saveAns(v){answers[exam.questions[idx].id]=v;renderNav()}; function go(i){idx=i;renderQ()}; $('prev').onclick=()=>{if(idx>0)go(idx-1)};$('next').onclick=()=>{if(idx<exam.questions.length-1)go(idx+1)};
-$('submit').onclick=()=>submit(false); async function submit(auto){let missing=exam.questions.filter(q=>!answers[q.id]).map(q=>q.display_number);if(missing.length&&!auto){alert('Chưa trả lời câu: '+missing.join(', '));go(exam.questions.findIndex(q=>!answers[q.id]));return}try{$('submit').disabled=true;const r=await api('submit',{attempt_id:attemptId,answers});clearInterval(timer);$('exam').classList.add('hidden');$('result').classList.remove('hidden');$('result').innerHTML=`<h2>Kết quả</h2><p><b>Điểm:</b> ${r.score}/${r.total_score}</p><p><b>Kết quả:</b> ${r.result}</p><p><b>Thời gian:</b> ${Math.round(r.duration_seconds/60)} phút</p><p>Câu tự luận mặc định 5/5 và có thể được quản trị viên chấm lại.</p>`}catch(e){$('submit').disabled=false;alert(e.message||String(e))}}
-function escapeHtml(s){return String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
-</script></body></html>
+
+.wrap{
+  max-width:760px;
+  margin:auto;
+  padding:16px
+}
+
+.card{
+  background:#fff;
+  border-radius:14px;
+  padding:18px;
+  margin:12px 0;
+  box-shadow:0 2px 10px #0001
+}
+
+input,
+textarea,
+button{
+  font:inherit;
+  width:100%;
+  box-sizing:border-box;
+  padding:12px;
+  border-radius:9px;
+  border:1px solid #ccd3da
+}
+
+button{
+  background:#1769e0;
+  color:#fff;
+  border:0;
+  font-weight:700;
+  margin-top:10px
+}
+
+button:disabled{
+  opacity:.6;
+  cursor:not-allowed
+}
+
+.danger{
+  background:#b42318
+}
+
+.muted{
+  color:#667085
+}
+
+.q{
+  padding:14px 0;
+  border-bottom:1px solid #eee
+}
+
+.opt{
+  display:block;
+  padding:10px 0
+}
+
+.nav{
+  display:grid;
+  grid-template-columns:repeat(6,1fr);
+  gap:6px
+}
+
+.nav button{
+  background:#eef2f6;
+  color:#17202a;
+  margin:0
+}
+
+.nav button.done{
+  background:#d1fadf
+}
+
+.timer{
+  font-size:24px;
+  font-weight:700;
+  text-align:center;
+  position:sticky;
+  top:0;
+  background:#fff;
+  padding:10px;
+  z-index:3
+}
+
+.hidden{
+  display:none
+}
+
+.unanswered{
+  color:#b42318;
+  font-weight:700
+}
+
+.success{
+  color:#027a48;
+  font-weight:700
+}
+
+.code-help{
+  font-size:13px;
+  color:#667085;
+  margin-top:5px
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="wrap">
+
+  <!-- ================= START ================= -->
+
+  <div class="card" id="start">
+
+    <h2>Kiểm tra nội quy V1</h2>
+
+    <p class="muted">
+      45 phút · Đạt từ 70/100 · Được phép thi lại không giới hạn
+    </p>
+
+    <label>Mã nhân viên</label>
+
+    <input
+      id="code"
+      autocomplete="off"
+      autocapitalize="characters"
+      placeholder="Ví dụ: VN123456"
+      maxlength="8"
+    >
+
+    <div class="code-help">
+      Nhập VN + 6 chữ số. Ví dụ: VN123456
+    </div>
+
+    <br>
+
+    <label>Họ và tên</label>
+
+    <input
+      id="name"
+      autocomplete="name"
+      placeholder="Nguyễn Văn A"
+    >
+
+    <button id="begin">
+      Bắt đầu
+    </button>
+
+    <p
+      id="msg"
+      class="unanswered"
+    ></p>
+
+  </div>
+
+
+  <!-- ================= EXAM ================= -->
+
+  <div
+    id="exam"
+    class="hidden"
+  >
+
+    <div
+      class="card timer"
+      id="timer"
+    >
+      45:00
+    </div>
+
+    <div class="card">
+
+      <div id="qnav"></div>
+
+    </div>
+
+    <div class="card">
+
+      <div id="question"></div>
+
+      <button id="prev">
+        Câu trước
+      </button>
+
+      <button id="next">
+        Câu tiếp
+      </button>
+
+      <button
+        id="submit"
+        class="danger"
+      >
+        Nộp bài
+      </button>
+
+    </div>
+
+  </div>
+
+
+  <!-- ================= RESULT ================= -->
+
+  <div
+    id="result"
+    class="card hidden"
+  ></div>
+
+</div>
+
+
+<script>
+
+/* =====================================================
+   CONFIG
+===================================================== */
+
+const cfg =
+  window.APP_CONFIG;
+
+const sb =
+  supabase.createClient(
+    cfg.SUPABASE_URL,
+    cfg.SUPABASE_PUBLISHABLE_KEY
+  );
+
+let exam = null;
+
+let attemptId = null;
+
+let answers = {};
+
+let idx = 0;
+
+let endAt = 0;
+
+let timer = null;
+
+
+/* =====================================================
+   API
+===================================================== */
+
+const EXAM_API =
+  cfg.SUPABASE_URL +
+  '/functions/v1/exam-api';
+
+
+async function api(
+  action,
+  body
+){
+
+  const r =
+    await fetch(
+      EXAM_API,
+      {
+        method:'POST',
+
+        headers:{
+          'Content-Type':
+            'application/json',
+
+          'apikey':
+            cfg.SUPABASE_PUBLISHABLE_KEY
+        },
+
+        body:
+          JSON.stringify({
+            action,
+            ...body
+          })
+      }
+    );
+
+  let data;
+
+  try{
+
+    data =
+      await r.json();
+
+  }catch{
+
+    throw new Error(
+      'Máy chủ trả về dữ liệu không hợp lệ.'
+    );
+
+  }
+
+  if(!r.ok){
+
+    throw new Error(
+      data.error ||
+      'Lỗi Edge Function'
+    );
+
+  }
+
+  return data;
+}
+
+
+/* =====================================================
+   ELEMENT
+===================================================== */
+
+const $ =
+  id =>
+    document.getElementById(id);
+
+
+/* =====================================================
+   BEGIN EXAM
+===================================================== */
+
+$('begin').onclick =
+  async () => {
+
+    try{
+
+      $('msg').textContent =
+        '';
+
+
+      let code =
+        $('code')
+          .value
+          .trim()
+          .toUpperCase();
+
+
+      const name =
+        $('name')
+          .value
+          .trim();
+
+
+      /* ---------- CHECK CODE ---------- */
+
+      if(
+        !/^VN\d{6}$/.test(code)
+      ){
+
+        throw new Error(
+          'Mã nhân viên phải có dạng VN + 6 chữ số. Ví dụ: VN123456.'
+        );
+
+      }
+
+
+      /* ---------- CHECK NAME ---------- */
+
+      if(!name){
+
+        throw new Error(
+          'Vui lòng nhập họ và tên.'
+        );
+
+      }
+
+
+      /* ---------- SHOW NORMALIZED CODE ---------- */
+
+      $('code').value =
+        code;
+
+
+      $('msg').textContent =
+        'Đang kết nối...';
+
+
+      $('begin').disabled =
+        true;
+
+
+      /* ---------- START ---------- */
+
+      exam =
+        await api(
+          'start',
+          {
+            employee_code:
+              code,
+
+            employee_name:
+              name
+          }
+        );
+
+
+      /* ---------- ATTEMPT ---------- */
+
+      attemptId =
+        exam.attempt_id;
+
+
+      /* ---------- TIMER ---------- */
+
+      endAt =
+        new Date(
+          exam.expires_at
+        ).getTime();
+
+
+      /* ---------- SWITCH SCREEN ---------- */
+
+      $('start')
+        .classList
+        .add('hidden');
+
+
+      $('exam')
+        .classList
+        .remove('hidden');
+
+
+      /* ---------- RENDER ---------- */
+
+      renderNav();
+
+      renderQ();
+
+
+      /* ---------- TIMER ---------- */
+
+      timer =
+        setInterval(
+          tick,
+          500
+        );
+
+      tick();
+
+    }catch(e){
+
+      $('msg').textContent =
+        e.message ||
+        String(e);
+
+      $('begin').disabled =
+        false;
+
+    }
+
+  };
+
+
+/* =====================================================
+   TIMER
+===================================================== */
+
+function tick(){
+
+  const s =
+    Math.max(
+      0,
+      Math.floor(
+        (
+          endAt -
+          Date.now()
+        ) / 1000
+      )
+    );
+
+
+  $('timer')
+    .textContent =
+      `${String(
+        Math.floor(s / 60)
+      ).padStart(2,'0')}:${String(
+        s % 60
+      ).padStart(2,'0')}`;
+
+
+  if(s <= 0){
+
+    clearInterval(timer);
+
+    submit(true);
+
+  }
+
+}
+
+
+/* =====================================================
+   NAVIGATION
+===================================================== */
+
+function renderNav(){
+
+  $('qnav').innerHTML =
+    exam.questions
+      .map(
+        (q,i) =>
+          `
+          <button
+            id="n${i}"
+            onclick="go(${i})"
+          >
+            ${q.display_number}
+          </button>
+          `
+      )
+      .join('');
+
+
+  [
+    ...document.querySelectorAll(
+      '#qnav button'
+    )
+  ]
+  .forEach(
+    (b,i) => {
+
+      b.classList.toggle(
+        'done',
+        !!answers[
+          exam.questions[i].id
+        ]
+      );
+
+    }
+  );
+
+}
+
+
+/* =====================================================
+   RENDER QUESTION
+===================================================== */
+
+function renderQ(){
+
+  const q =
+    exam.questions[idx];
+
+  const a =
+    answers[q.id] || '';
+
+
+  let html =
+    `
+    <div class="muted">
+      Câu ${q.display_number}
+      · ${q.max_points} điểm
+    </div>
+
+    <h3>
+      ${escapeHtml(q.prompt)}
+    </h3>
+    `;
+
+
+  /* ---------- TRUE / FALSE ---------- */
+
+  if(q.type === 'tf'){
+
+    html +=
+      [
+        'Đúng',
+        'Sai'
+      ]
+      .map(
+        x =>
+          `
+          <label class="opt">
+
+            <input
+              type="radio"
+              name="ans"
+              value="${x}"
+              ${a === x ? 'checked' : ''}
+              onchange="saveAns(this.value)"
+            >
+
+            ${x}
+
+          </label>
+          `
+      )
+      .join('');
+
+  }
+
+
+  /* ---------- MCQ ---------- */
+
+  else if(
+    q.type === 'mcq'
+  ){
+
+    html +=
+      Object.entries(
+        q.options || {}
+      )
+      .map(
+        ([k,v]) =>
+          `
+          <label class="opt">
+
+            <input
+              type="radio"
+              name="ans"
+              value="${k}"
+              ${a === k ? 'checked' : ''}
+              onchange="saveAns(this.value)"
+            >
+
+            <b>${k}.</b>
+            ${escapeHtml(v)}
+
+          </label>
+          `
+      )
+      .join('');
+
+  }
+
+
+  /* ---------- ESSAY ---------- */
+
+  else{
+
+    html +=
+      `
+      <textarea
+        id="essay"
+        rows="7"
+        onchange="saveAns(this.value)"
+        oninput="saveAns(this.value)"
+      >${escapeHtml(a)}</textarea>
+      `;
+
+  }
+
+
+  $('question').innerHTML =
+    html;
+
+
+  renderNav();
+
+}
+
+
+/* =====================================================
+   SAVE ANSWER
+===================================================== */
+
+function saveAns(v){
+
+  answers[
+    exam.questions[idx].id
+  ] = v;
+
+  renderNav();
+
+}
+
+
+/* =====================================================
+   GO QUESTION
+===================================================== */
+
+function go(i){
+
+  idx = i;
+
+  renderQ();
+
+}
+
+
+/* =====================================================
+   PREV / NEXT
+===================================================== */
+
+$('prev').onclick =
+  () => {
+
+    if(idx > 0){
+
+      go(idx - 1);
+
+    }
+
+  };
+
+
+$('next').onclick =
+  () => {
+
+    if(
+      idx <
+      exam.questions.length - 1
+    ){
+
+      go(idx + 1);
+
+    }
+
+  };
+
+
+/* =====================================================
+   SUBMIT
+===================================================== */
+
+$('submit').onclick =
+  () =>
+    submit(false);
+
+
+async function submit(auto){
+
+  /* ---------- MISSING ANSWERS ---------- */
+
+  const missing =
+    exam.questions
+      .filter(
+        q =>
+          !answers[q.id]
+      )
+      .map(
+        q =>
+          q.display_number
+      );
+
+
+  if(
+    missing.length &&
+    !auto
+  ){
+
+    alert(
+      'Chưa trả lời câu: ' +
+      missing.join(', ')
+    );
+
+
+    const first =
+      exam.questions.findIndex(
+        q =>
+          !answers[q.id]
+      );
+
+
+    if(first >= 0){
+
+      go(first);
+
+    }
+
+    return;
+
+  }
+
+
+  try{
+
+    $('submit').disabled =
+      true;
+
+
+    const r =
+      await api(
+        'submit',
+        {
+          attempt_id:
+            attemptId,
+
+          answers
+        }
+      );
+
+
+    clearInterval(timer);
+
+
+    $('exam')
+      .classList
+      .add('hidden');
+
+
+    $('result')
+      .classList
+      .remove('hidden');
+
+
+    $('result').innerHTML =
+      `
+      <h2>Kết quả</h2>
+
+      <p>
+        <b>Mã nhân viên:</b>
+        ${escapeHtml(
+          r.employee_code || ''
+        )}
+      </p>
+
+      <p>
+        <b>Họ và tên:</b>
+        ${escapeHtml(
+          r.employee_name || ''
+        )}
+      </p>
+
+      <p>
+        <b>Điểm:</b>
+        ${r.score}/${r.total_score}
+      </p>
+
+      <p>
+        <b>Kết quả:</b>
+        ${escapeHtml(
+          r.result
+        )}
+      </p>
+
+      <p>
+        <b>Thời gian:</b>
+        ${Math.round(
+          r.duration_seconds / 60
+        )} phút
+      </p>
+
+      <p>
+        Câu tự luận mặc định 5/5
+        và có thể được quản trị viên
+        chấm lại.
+      </p>
+      `;
+
+
+  }catch(e){
+
+    $('submit').disabled =
+      false;
+
+
+    alert(
+      e.message ||
+      String(e)
+    );
+
+  }
+
+}
+
+
+/* =====================================================
+   ESCAPE HTML
+===================================================== */
+
+function escapeHtml(s){
+
+  return String(
+    s ?? ''
+  )
+  .replace(
+    /[&<>'"]/g,
+    c =>
+      ({
+        '&':'&amp;',
+        '<':'&lt;',
+        '>':'&gt;',
+        "'":'&#39;',
+        '"':'&quot;'
+      }[c])
+  );
+
+}
+
+</script>
+
+</body>
+
+</html>
