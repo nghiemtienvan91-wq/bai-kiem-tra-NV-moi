@@ -5,7 +5,7 @@
 <section id="exam" class="hidden"><div class="card" style="display:flex;justify-content:space-between"><div><b id="topicName"></b><div class="sub" id="cand"></div></div><div class="timer">⏱ <span id="clock">45:00</span></div></div><form id="form"></form><div class="card"><button type="button" onclick="submitExam(false)">NỘP BÀI</button></div></section>
 <section id="result" class="hidden card"><h2>Kết quả</h2><div id="resultBox"></div></section></div>
 <script>
-const API_URL="YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL";let qs=[],attemptId="",deadline=0,timer;
+const API_URL="https://script.google.com/macros/s/AKfycbx9YCQpXfrKYcm5dHZQlmbv-yXHnK7CT9YtGl8ZtowdHstBZUH9QJNzk9u2fOc1MTSW/exec";let qs=[],attemptId="",deadline=0,timer;
 const $=x=>document.getElementById(x);
 function jsonp(action,extra={}){return new Promise((resolve,reject)=>{const cb="cb_"+Date.now()+"_"+Math.random().toString(36).slice(2),s=document.createElement("script");window[cb]=d=>{delete window[cb];s.remove();resolve(d)};s.onerror=()=>{delete window[cb];s.remove();reject(Error("Không kết nối được máy chủ"))};s.src=API_URL+"?"+new URLSearchParams({action,...extra,callback:cb});document.body.appendChild(s)})}
 async function load(){try{const r=await jsonp("topics");$("topic").innerHTML=(r.topics||[]).map(t=>`<option value="${t.id}">${t.name}</option>`).join("")}catch(e){$("topic").innerHTML="<option>Lỗi tải chủ đề</option>"}}
